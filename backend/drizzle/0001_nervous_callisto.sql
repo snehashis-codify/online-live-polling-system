@@ -1,0 +1,1 @@
+ALTER TABLE "polls" ALTER COLUMN "hash_link" SET DATA TYPE text;
