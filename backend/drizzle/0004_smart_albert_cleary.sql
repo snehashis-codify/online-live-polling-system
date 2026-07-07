@@ -1,0 +1,1 @@
+ALTER TABLE "polls" RENAME COLUMN "responseMode" TO "response_mode";
