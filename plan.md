@@ -2,14 +2,14 @@
 
 Milestone checklist only — no schema fields, endpoint names, or architecture choices spelled out on purpose. Design those yourself as you go; that's the point of building it solo.
 
-## Current state snapshot (2026-07-08)
+## Current state snapshot (2026-07-18)
 
 **Backend**
-- Auth: register + login working (password hashing, JWT access+refresh). Refresh/logout not done yet.
+- Auth: register + login working (password hashing, JWT access+refresh). Refresh/logout still not done.
 - Schema: `users → polls → questions → options`, plus `responses`/`answers` (one row per selected option, cascade FKs, partial unique index enforcing one editable response per authenticated user per poll). `questions.isMandatory`, `polls.responseMode` (anonymous/authenticated), `polls.isPublished` all in place. Migrated. Design rationale for all of it in `design-decisions.md`.
-- Poll module: creation only. No list/get/update, no response submission, no analytics, no publish.
+- Poll module: creator can create a poll, list their own polls, view a single poll's detail, and activate a poll (draft → active, with expiry). Openness is computed lazily from status + expiry rather than flipped by a background job — a poll's expiry countdown is global from activation time, not per-participant. No public (non-owner) access, no response submission, no update/delete, no analytics, no publish.
 - No Socket.io yet.
-- Phase 0 done. Phase 1 (auth refresh/logout/validation) deferred for now.
+- Phase 0 done. Phase 1 (auth refresh/logout/validation) still deferred. Phase 2 (poll lifecycle, creator side) done.
 
 **Frontend**: not started.
 
@@ -41,3 +41,9 @@ Auth pages, protected poll builder (dynamic questions/options, mandatory + anony
 
 ## Phase 8 — Wrap-up
 README, deployment.
+
+---
+
+## Future scope (beyond this plan)
+
+- **Port backend to NestJS + TypeORM.** Current stack is Express + Drizzle. Client project at day job uses Nest/TypeORM — porting this backend afterward gives an interview story ("built it in Express/Drizzle, then ported to Nest/TypeORM to match production stack") without disrupting the current build. Not to be started until Phase 8 is done.

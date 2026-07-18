@@ -1,20 +1,19 @@
 import type { Request, Response, NextFunction } from "express";
 import type { ZodType } from "zod";
+import ApiError from "../util/api-error.util.js";
 
-const validate = (schema: ZodType) => {
-  return async (req: Request, res: Response, next: NextFunction) => {
-    const result = schema.safeParse(req.body);
+type ValidationTarget = "body" | "params" | "query";
+
+const validate = (schema: ZodType, target: ValidationTarget = "body") => {
+  return async (req: Request, _res: Response, next: NextFunction) => {
+    const result = schema.safeParse(req[target]);
     if (!result.success) {
-      res.status(400).json({
-        message: "Validation error",
-        errors: result.error.issues.map((issue) => ({
-          path: issue.path.join("."),
-          message: issue.message,
-        })),
-      });
-      return;
+      const message = result.error.issues
+        .map((issue) => `${issue.path.join(".")}: ${issue.message}`)
+        .join("\n");
+      throw ApiError.badRequest(message);
     }
-    req.body = result.data;
+    req[target] = result.data;
     next();
   };
 };

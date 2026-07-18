@@ -110,3 +110,39 @@ Considered adding a mechanism to cap how many times an anonymous respondent can 
 
 - **`responses`**: `id`, `pollId` (FK → polls, cascade), `respondentId` (nullable FK → users, cascade), `submittedAt`. Partial unique index on `(pollId, respondentId) WHERE respondentId IS NOT NULL`.
 - **`answers`**: `id`, `responseId` (FK → responses, cascade), `optionId` (FK → options, cascade), `createdAt`. Indexed on `responseId` and `optionId`.
+
+---
+
+## Poll lifecycle — creator side (Phase 2)
+
+No schema changes needed — `pollTable.status` (draft/active/closed) and `pollTable.expTime` (nullable timestamp) were already added in Phase 0.
+
+### Decision: draft→active transition is a dedicated action endpoint, not a generic PATCH
+
+Considered:
+1. Fold `status`/`expTime` into a generic `PATCH /poll/:id/update` alongside any other editable field.
+2. **`POST /poll/:id/activate`** — a dedicated endpoint that only performs the draft→active transition. ← chosen
+
+**Why not the generic PATCH?** A single "update" endpoint invites ambiguity about what's actually legal — can you set `status` directly to `closed`? Edit questions after the poll is already active and has responses? A generic patch has no natural place to enforce "this is a state machine, not a bag of mutable fields."
+
+**Chosen:** a named action endpoint that only allows `draft → active`, requires `expTime` in the request, validates it's in the future, and rejects the call outright if the poll isn't currently `draft` (no re-activation, no activating an already-closed poll).
+
+---
+
+### Decision: expiry enforcement is lazy/computed, not an eager DB status flip
+
+Considered:
+1. **Lazy/computed** — `status` stays `active` in the DB past `expTime`; anywhere that needs to know if a poll is accepting responses computes `status === 'active' && (expTime === null || expTime > now())`. ← chosen for now
+2. Eager flip via a scheduled job (e.g. Inngest `step.sleepUntil(expTime)` at activation time) that writes `status = 'closed'` the moment a poll expires.
+
+**Why not eager/Inngest, at least for now?** Even with a background job reliably flipping `status`, the Phase 3 submission endpoint still has to independently check `expTime > now()` at write time — there's an unavoidable race window between actual expiry and the job executing, so a background job can never be the *sole* gate on a correctness-critical accept/reject decision. That makes eager-flip additive (nicer-looking `status` in list/dashboard views) rather than required, and it comes with real setup cost (SDK, dev server, a callback endpoint, signing keys in prod).
+
+**Revisit in Phase 6:** once Socket.io is in place, "poll just expired" becomes something worth actively *pushing* to a live creator dashboard the instant it happens, not just computing lazily on next request — that's where Inngest's delayed-execution model (schedule the "close" event at activation time) earns its keep. Introducing it in Phase 2 would mean maintaining two status-derivation code paths (lazy check + eager job) before the second one is actually needed.
+
+**Implication:** a shared `isPollOpen(poll)` helper (checking `status` + `expTime` against `now()`) is used both by the Phase 2 list/detail responses (to report a derived `isOpen`/effective status to the frontend) and by the Phase 3 submission check — one place owns the definition of "open."
+
+---
+
+### Decision: poll detail authorization returns 404, not 403, for non-owned polls
+
+Fetching another creator's poll by ID returns 404 rather than 403 — 403 would confirm the poll ID exists and belongs to someone else, leaking existence information. 404 makes "not yours" indistinguishable from "doesn't exist."
