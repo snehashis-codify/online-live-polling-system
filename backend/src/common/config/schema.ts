@@ -39,7 +39,7 @@ const pollTable = pgTable(
         onDelete: "cascade",
       })
       .notNull(),
-    hashLink: text("hash_link").notNull().unique(),
+    linkToken: text("link_token").notNull().unique(),
     status: pollStatusEnum().default("draft").notNull(),
     responseMode: responseModeEnum("response_mode").default("anonymous").notNull(),
     isPublished: boolean("is_published").default(false).notNull(),

@@ -1,5 +1,6 @@
 import z from "zod";
-import type { optionsTable, questionTable } from "../../common/config/schema.js";
+import { quesTypeEnum, type optionsTable, type questionTable } from "../../../common/config/schema.js";
+
 
 const optionSchema = z.object({
   id: z.uuid("Option ID must be a valid UUID"),
@@ -9,7 +10,7 @@ const optionSchema = z.object({
 
 const questionSchema = z.object({
   questionTitle: z.string().min(1, "Question title cannot be empty"),
-  questionType: z.enum(["radio", "checkbox"], {
+  questionType: z.enum(quesTypeEnum.enumValues, {
     error: "Question type must be 'radio' or 'checkbox'",
   }).default("radio"),
   options: z.array(optionSchema).min(2, "Each question must have at least 2 options"),
