@@ -1,7 +1,8 @@
 import express from "express";
 import type { Express } from "express";
 import authRouter from "./modules/auth/auth.route.js";
-import pollRouter from "./modules/poll/poll.route.js"
+import pollRouter from "./modules/poll/poll.route.js";
+import responseRouter from "./modules/response/response.route.js";
 import globalErrorHandler from "./common/middlewares/error.middleware.js";
 function createApplication(): Express {
   const app = express();
@@ -14,8 +15,9 @@ function createApplication(): Express {
   });
 
   app.use("/api/auth", authRouter);
-  app.use("/api/poll",pollRouter)
-  app.use(globalErrorHandler)
+  app.use("/api/poll", pollRouter);
+  app.use("/api/response", responseRouter);
+  app.use(globalErrorHandler);
   return app;
 }
 
