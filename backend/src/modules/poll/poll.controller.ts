@@ -2,6 +2,7 @@ import type { NextFunction, Request, Response } from "express";
 import PollService from "./poll.service.js";
 import ApiError from "../../common/util/api-error.util.js";
 import ApiResponse from "../../common/util/api-response.util.js";
+import type { PollRow } from "../../common/types/express.js";
 const pollService = new PollService();
 class PollController {
   async create(req: Request, res: Response, next: NextFunction) {
@@ -50,6 +51,19 @@ class PollController {
 
       await pollService.activatePoll(req.body, pollId);
       ApiResponse.ok(res, null, "Poll is activated");
+    } catch (error) {
+      next(error);
+    }
+  }
+  async getPublicPollDetails(req: Request, res: Response, next: NextFunction) {
+    try {
+      const response = await pollService.getPublicPollDetails(
+        req.poll as PollRow,
+      );
+      if (!response) {
+        throw ApiError.notFound("Poll not found");
+      }
+      ApiResponse.ok(res, response, "Poll details fetched successfully");
     } catch (error) {
       next(error);
     }

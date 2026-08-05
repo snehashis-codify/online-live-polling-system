@@ -16,6 +16,8 @@ import type { GetPollDetailOutput } from "./dto/getPollDetail.dto.js";
 import { isPollOpen } from "./util/isPollOpen.util.js";
 import ApiError from "../../common/util/api-error.util.js";
 import type { ActivatePollInput } from "./dto/activatePoll.dto.js";
+import type { PollRow } from "../../common/types/express.js";
+import type { GetPublicPollDetailOutput } from "./dto/getPublicPollDetail.dto.js";
 
 class PollService {
   async create(
@@ -179,6 +181,58 @@ class PollService {
       .update(pollTable)
       .set({ status: "active", expTime: expDate })
       .where(eq(pollTable.id, pollId));
+  }
+  async getPublicPollDetails(
+    pollDetails: Pick<
+      PollRow,
+      "id" | "title" | "status" | "responseMode" | "expTime"
+    >,
+  ): Promise<GetPublicPollDetailOutput | undefined> {
+    const {
+      id: pollId,
+      title,
+      status,
+      responseMode,
+      expTime,
+    } = pollDetails;
+    const response = await db
+      .select()
+      .from(questionTable)
+      .where(eq(questionTable.pollId, pollId))
+      .leftJoin(optionsTable, eq(questionTable.id, optionsTable.questionId));
+    const getUniqueOptionsList = response.flatMap((o) => o.options ?? []);
+    if (!getUniqueOptionsList || getUniqueOptionsList.length <= 0) return;
+    const getUniqueQuestionList = response
+      .flatMap((quesRow) => quesRow.questions)
+      .filter((question, index, self) => {
+        return index === self.findIndex((q) => q.id === question.id);
+      })
+      .map((question) => {
+        return {
+          id: question.id,
+          questionTitle: question.questionTitle,
+          questionType: question.questionType!,
+          isMandatory: question.isMandatory,
+          options: getUniqueOptionsList
+            .filter((o) => o.questionId === question.id)
+            .map((o) => {
+              return {
+                id: o.id,
+                title: o.optionTitle,
+                value: o.optionValue,
+              };
+            }),
+        };
+      });
+    const publicPollDetails = {
+      id: pollId,
+      title,
+      expTime,
+      responseMode,
+      isOpen: isPollOpen(expTime, status),
+      questions: getUniqueQuestionList,
+    };
+    return publicPollDetails;
   }
 }
 export default PollService;

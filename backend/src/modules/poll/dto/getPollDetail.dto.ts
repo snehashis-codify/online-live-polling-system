@@ -5,13 +5,13 @@ import {
   responseModeEnum,
 } from "../../../common/config/schema.js";
 
-const optionSchema = z.object({
+export const optionSchema = z.object({
   id: z.uuid("Option ID must be a valid UUID"),
   title: z.string().min(1, "Option title cannot be empty"),
   value: z.string().min(1, "Option value cannot be empty"),
 });
 
-const questionSchema = z.object({
+export const questionSchema = z.object({
   id: z.uuid("Question ID must be a valid UUID"),
   questionTitle: z.string().min(1, "Question title cannot be empty"),
   questionType: z.enum(quesTypeEnum.enumValues, {
