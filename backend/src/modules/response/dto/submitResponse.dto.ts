@@ -1,17 +1,23 @@
 import z from "zod";
 
-const answerSchema = z.object({
-  questionId: z.uuid("Question ID must be a valid UUID"),
-  optionId: z.uuid("Option ID must be a valid UUID"),
+const questionAnsSchema = z.object({
+  quesId: z.uuid("Question ID must be a valid UUID"),
+  optionId: z
+    .array(z.uuid("Option ID must be a valid UUID"))
+    .refine(
+      (optionId) => new Set(optionId).size === optionId.length,
+      { message: "Each option can only be selected once" },
+    )
+    .nullable(),
 });
 
 export const submitResponseInputSchema = z.object({
-  answers: z
-    .array(answerSchema)
+  questionAns: z
+    .array(questionAnsSchema)
     .min(1, "At least one answer is required")
     .refine(
-      (answers) =>
-        new Set(answers.map((a) => a.questionId)).size === answers.length,
+      (questionAns) =>
+        new Set(questionAns.map((a) => a.quesId)).size === questionAns.length,
       { message: "Each question can only be answered once" },
     ),
 });
