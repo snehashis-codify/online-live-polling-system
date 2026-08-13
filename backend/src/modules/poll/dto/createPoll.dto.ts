@@ -1,9 +1,8 @@
 import z from "zod";
-import { quesTypeEnum, type optionsTable, type questionTable } from "../../../common/config/schema.js";
+import { quesTypeEnum, responseModeEnum, type optionsTable, type questionTable } from "../../../common/config/schema.js";
 
 
 const optionSchema = z.object({
-  id: z.uuid("Option ID must be a valid UUID"),
   title: z.string().min(1, "Option title cannot be empty"),
   value: z.string().min(1, "Option value cannot be empty"),
 });
@@ -18,6 +17,9 @@ const questionSchema = z.object({
 
 export const createPollInputSchema = z.object({
   title: z.string().min(1, "Poll title cannot be empty"),
+  responseMode: z.enum(responseModeEnum.enumValues, {
+    error: "Response mode must be 'anonymous' or 'authenticated'",
+  }).default("anonymous"),
   questions: z.array(questionSchema).min(1, "Poll must have at least one question"),
 });
 
