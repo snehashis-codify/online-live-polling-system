@@ -25,12 +25,12 @@ class PollService {
     user: any,
   ): Promise<CreatePollOutput | undefined> {
     const { id } = user;
-    const { title, questions } = reqBody;
+    const { title, responseMode, questions } = reqBody;
     const link = randomBytes(16).toString("hex");
     const response = await db.transaction(async (tx) => {
       const [pollData] = await tx
         .insert(pollTable)
-        .values({ creatorId: id, title, linkToken: link })
+        .values({ creatorId: id, title, responseMode, linkToken: link })
         .returning({ pollId: pollTable.id });
 
       if (!pollData) {
@@ -169,12 +169,13 @@ class PollService {
       throw ApiError.badRequest(
         "This poll doesn't have questions. Kindly add it before activating the poll",
       );
-    const { status } = filterDuplicatePoll[0]!;
+    const { status, expTime } = filterDuplicatePoll[0]!;
 
-    if (status !== "draft")
-      throw ApiError.conflict(
-        "Can't activate the poll with status as active/closed",
-      );
+    if (status === "closed")
+      throw ApiError.conflict("Can't activate a closed poll");
+
+    if (isPollOpen(expTime, status))
+      throw ApiError.conflict("Poll is already active");
     const currentDate = new Date();
     const expDate = new Date(currentDate.getTime() + durationMinutes * 60000);
     await db
