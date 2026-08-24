@@ -146,3 +146,33 @@ Considered:
 ### Decision: poll detail authorization returns 404, not 403, for non-owned polls
 
 Fetching another creator's poll by ID returns 404 rather than 403 — 403 would confirm the poll ID exists and belongs to someone else, leaking existence information. 404 makes "not yours" indistinguishable from "doesn't exist."
+
+---
+
+## Live results (Phase 6 — real-time)
+
+### Decision: live results are pushed via Socket.io, not polled over REST
+
+Considered: client polls a `GET /results` endpoint every few seconds vs. server pushes updates over a socket.
+
+**Why not polling?** Wasted requests when nothing changed, up to a full poll-interval of latency before a new vote shows up, and server load scales with `viewers × poll-frequency` instead of with actual submission events.
+
+**Why not plain SSE (Server-Sent Events)?** Since this data only flows one direction (server → client), SSE would technically be sufficient and simpler than a full bidirectional WebSocket — no handshake protocol, works over plain HTTP, browser auto-reconnects natively. Not chosen here because the hackathon rules explicitly require real-time updates via WebSockets/Socket.io as a grading criterion — worth remembering as the "better tool for the job" answer if this pattern comes up outside the hackathon constraint.
+
+**Chosen:** Socket.io, one room per poll (keyed by `pollId`). On a successful submission, the server recomputes the per-question tallies (`answers` joined to `options`, grouped by option — no schema change needed, uses the existing `answers_option_idx`) and emits the update to everyone in that poll's room.
+
+### Decision: submission flow stays atomic; live results only affect what happens *after* submit
+
+The whole-poll submit (one `db.transaction` covering the `responses` row and all its `answers`) is unchanged — considered and rejected restructuring to per-question incremental saves (which would've been required for a Kahoot-style "live update after every single question" flow), since that submission model isn't what this poll platform is. Instead: user submits the whole poll as before, then gets redirected to an analytics/results page, which is what opens the socket connection.
+
+### Decision: only users who have submitted can see live results while the poll is active; results go public once the poll closes
+
+**Active poll:** joining the results room requires proof you've already submitted. Authenticated users are checked via their JWT against `responses(pollId, respondentId)` on socket connect. Non-submitters get nothing.
+
+**Closed poll:** results become visible to anyone holding the link, no submission required — and since nothing changes after close, that path doesn't need a socket at all, just a plain REST `GET` gated on the link token.
+
+**Anonymous respondents excluded from live results — deferred, not designed.** The blocker: anonymous respondents have no persistent identity (`respondentId` is null), so there's nothing to check against on socket connect the way authenticated users are checked via JWT. Gating them would require handing back some proof of submission at submit time (e.g. the `responseId`, or a short-lived signed token wrapping `pollId+responseId`) for the client to present when opening the socket. Left out of scope for now; revisit if anonymous live-results access becomes a real requirement.
+
+**No completion percentage.** Polls are link-based with no fixed invite list, so there's no known denominator for "X% haven't answered yet." Live results are a running count only ("N submitted so far"), not a completion stat.
+
+**Reconnect handling (to keep in mind when building):** a client that reconnects (e.g. after the network-drop scenario) should receive the current snapshot on room-join, not just future deltas — otherwise a dropped connection means they silently miss whatever changed while offline.
