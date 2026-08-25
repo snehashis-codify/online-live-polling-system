@@ -176,3 +176,11 @@ The whole-poll submit (one `db.transaction` covering the `responses` row and all
 **No completion percentage.** Polls are link-based with no fixed invite list, so there's no known denominator for "X% haven't answered yet." Live results are a running count only ("N submitted so far"), not a completion stat.
 
 **Reconnect handling (to keep in mind when building):** a client that reconnects (e.g. after the network-drop scenario) should receive the current snapshot on room-join, not just future deltas — otherwise a dropped connection means they silently miss whatever changed while offline.
+
+### Decision: poll creator bypasses the "must have submitted" gate
+
+The creator of a poll doesn't typically submit a response to their own poll, so the standard "check `responses(pollId, respondentId)`" gate would lock them out of their own live results. **Chosen:** on socket connect, allow the join if the user is the poll's `creatorId` OR has a submitted response — same as the 404-not-403 pattern elsewhere, ownership gets a direct check rather than being treated like any other authenticated user.
+
+### Decision: poll-expiry push uses Inngest, brought forward into this phase
+
+Phase 2 deliberately deferred the eager status-flip (see above) because there was nothing yet worth *pushing* to. Now that Socket.io exists, "poll just expired" is scheduled at activation time via `step.sleepUntil(expTime)` and pushed to the creator's dashboard the instant it fires. The lazy/computed `isPollOpen` check remains the source of truth for accept/reject on submission — this is additive (nicer live UX), not a replacement for that check.
