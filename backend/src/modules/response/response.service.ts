@@ -1,3 +1,4 @@
+import { and, eq } from "drizzle-orm";
 import db from "../../common/config/db.js";
 import { answerTable, responseTable } from "../../common/config/schema.js";
 import type { AuthenticatedUser } from "../../common/types/express.js";
@@ -17,16 +18,43 @@ class ResponseService {
 
     try {
       return await db.transaction(async (tx) => {
-        const [responseDetails] = await tx
-          .insert(responseTable)
-          .values({ pollId, respondentId: userId })
-          .returning({ responseId: responseTable.id });
+        let responseDetails: { responseId: string }[] | undefined;
+        const existingResponseDetails = userId
+          ? await tx
+              .select({ responseId: responseTable.id })
+              .from(responseTable)
+              .where(
+                and(
+                  eq(responseTable.pollId, pollId),
+                  eq(responseTable.respondentId, userId),
+                ),
+              )
+          : undefined;
+        const [existingResponse] = existingResponseDetails ?? [];
+        if (existingResponse) {
+          responseDetails = [existingResponse];
+          const responseId = existingResponse.responseId;
+          await tx
+            .update(responseTable)
+            .set({ updatedAt: new Date() })
+            .where(eq(responseTable.id, responseId));
+          await tx
+            .delete(answerTable)
+            .where(eq(answerTable.responseId, responseId));
+        } else {
+          responseDetails = await tx
+            .insert(responseTable)
+            .values({ pollId, respondentId: userId })
+            .returning({ responseId: responseTable.id });
+        }
+
         const insertedAnswerValues = questionAns.flatMap((val) => {
-          if (!val.optionId) {
+          if (!val.optionId || !responseDetails || !responseDetails[0]) {
             return [];
           }
+          const responseId = responseDetails[0].responseId;
           return val.optionId.map((option) => ({
-            responseId: responseDetails!.responseId,
+            responseId,
             optionId: option,
           }));
         });
@@ -36,7 +64,11 @@ class ResponseService {
               .values(insertedAnswerValues)
               .returning({ answerId: answerTable.id })
           : [];
-        return { responseId: responseDetails!.responseId, answerDetails };
+        const [finalResponse] = responseDetails ?? [];
+        return {
+          responseId: finalResponse?.responseId,
+          answerDetails,
+        };
       });
     } catch (error) {
       if (

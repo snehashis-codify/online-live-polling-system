@@ -171,11 +171,12 @@ class PollService {
       );
     const { status, expTime } = filterDuplicatePoll[0]!;
 
-    if (status === "closed")
-      throw ApiError.conflict("Can't activate a closed poll");
-
-    if (isPollOpen(expTime, status))
-      throw ApiError.conflict("Poll is already active");
+    if (status !== "draft")
+      throw ApiError.conflict(
+        isPollOpen(expTime, status)
+          ? "Poll is already active"
+          : "Can't activate a closed poll",
+      );
     const currentDate = new Date();
     const expDate = new Date(currentDate.getTime() + durationMinutes * 60000);
     await db

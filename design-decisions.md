@@ -151,7 +151,7 @@ Fetching another creator's poll by ID returns 404 rather than 403 — 403 would 
 
 ## Live results (Phase 6 — real-time)
 
-### Decision: live results are pushed via Socket.io, not polled over REST
+### Decision: live results are pushed via WebSockets, not polled over REST
 
 Considered: client polls a `GET /results` endpoint every few seconds vs. server pushes updates over a socket.
 
@@ -159,7 +159,7 @@ Considered: client polls a `GET /results` endpoint every few seconds vs. server 
 
 **Why not plain SSE (Server-Sent Events)?** Since this data only flows one direction (server → client), SSE would technically be sufficient and simpler than a full bidirectional WebSocket — no handshake protocol, works over plain HTTP, browser auto-reconnects natively. Not chosen here because the hackathon rules explicitly require real-time updates via WebSockets/Socket.io as a grading criterion — worth remembering as the "better tool for the job" answer if this pattern comes up outside the hackathon constraint.
 
-**Chosen:** Socket.io, one room per poll (keyed by `pollId`). On a successful submission, the server recomputes the per-question tallies (`answers` joined to `options`, grouped by option — no schema change needed, uses the existing `answers_option_idx`) and emits the update to everyone in that poll's room.
+**Chosen:** the `ws` package (raw WebSockets, not Socket.io), one room per poll (keyed by `pollId`) tracked server-side in an in-memory map of `pollId → sockets`, since `ws` doesn't provide room/broadcast primitives the way Socket.io would. On a successful submission, the server recomputes the per-question tallies (`answers` joined to `options`, grouped by option — no schema change needed, uses the existing `answers_option_idx`) and emits the update to everyone in that poll's room.
 
 ### Decision: submission flow stays atomic; live results only affect what happens *after* submit
 
@@ -183,4 +183,19 @@ The creator of a poll doesn't typically submit a response to their own poll, so 
 
 ### Decision: poll-expiry push uses Inngest, brought forward into this phase
 
-Phase 2 deliberately deferred the eager status-flip (see above) because there was nothing yet worth *pushing* to. Now that Socket.io exists, "poll just expired" is scheduled at activation time via `step.sleepUntil(expTime)` and pushed to the creator's dashboard the instant it fires. The lazy/computed `isPollOpen` check remains the source of truth for accept/reject on submission — this is additive (nicer live UX), not a replacement for that check.
+Phase 2 deliberately deferred the eager status-flip (see above) because there was nothing yet worth *pushing* to. Now that a WebSocket layer exists, "poll just expired" is scheduled at activation time via `step.sleepUntil(expTime)` and pushed to the creator's dashboard the instant it fires. The lazy/computed `isPollOpen` check remains the source of truth for accept/reject on submission — this is additive (nicer live UX), not a replacement for that check.
+
+### Decision: socket auth-on-connect handshake shape (planned, not yet built)
+
+Discussed 2026-09-23, before implementation started, as a starting point for whoever picks this up next.
+
+**Transport for the two pieces of identity the connect handler needs:**
+- `accessToken` — via cookie (already the existing JWT auth mechanism elsewhere in the app; cookies are sent automatically on a WS handshake since it's an HTTP upgrade request, so nothing new needed here).
+- `pollId` — via the connection URL/query param (e.g. `ws://host/results?pollId=...`), **not** a cookie. `pollId` is page/context data tied to which results page the client is on, not session data. A cookie set at submit-time gets ambiguous fast if the user has multiple poll tabs open or submits to a different poll later — the results page already knows its own `pollId` from its route, so just pass it through the connection URL.
+
+**Gate logic on connect, in order:**
+1. Check the poll's open/closed state via the existing shared `isPollOpen` helper (same one used by Phase 2 list/detail and the Phase 3 submission check — single source of truth, don't re-derive `status`/`expTime` logic here).
+2. If closed: don't create the socket at all — close with a reason/code so the client falls back to the plain REST `GET` results endpoint (per the "closed poll" decision above), rather than silently dropping the connection and leaving the client hanging.
+3. If open: allow the join only if `hasResponded` (check `responses(pollId, respondentId)` against the JWT-derived user) **OR** `isCreator` (`poll.creatorId === user.id`, the bypass decided above). Missing the creator-OR check here was an actual gap caught in discussion — don't gate solely on `hasResponded`.
+
+Anonymous respondents are still out of scope for this handshake (see "Anonymous respondents excluded from live results — deferred" above) — this plan only covers the authenticated path.

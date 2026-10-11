@@ -8,7 +8,7 @@ import authenticate from "../auth/auth.middleware.js";
 const authorizeOwnedPolls = () => {
   return async (
     req: Request<{ pollId: string }>,
-    res: Response,
+    _res: Response,
     next: NextFunction,
   ) => {
     const { id } = req?.user!;
