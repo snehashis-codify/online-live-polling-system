@@ -32,8 +32,8 @@ router.patch(
   "/activate/:pollId",
   authenticate,
   validate(pollIdParamSchema, "params"),
-  authorizeOwnedPolls(),
   validate(activatePollInputSchema, "body"),
+  authorizeOwnedPolls(),
   pollController.activatePoll,
 );
 
