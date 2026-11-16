@@ -16,6 +16,7 @@ export interface QuestionResult {
   questionId: Question["id"];
   questionTitle: Question["questionTitle"];
   questionType: Question["questionType"];
+  totalRespondents: number;
   options: OptionResult[];
 }
 
