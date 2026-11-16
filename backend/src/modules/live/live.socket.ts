@@ -7,6 +7,7 @@ import { getUserId } from "../../common/util/cookie-auth.util.js";
 import ApiError from "../../common/util/api-error.util.js";
 import { isPollOpen } from "../poll/util/isPollOpen.util.js";
 import LiveService from "./live.service.js";
+import ResultService from "../result/result.service.js";
 
 export interface LiveConnectionContext {
   pollId: string;
@@ -20,7 +21,7 @@ const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN ?? "http://localhost:3000";
 export const POLL_CLOSED_CODE = 4000;
 
 const liveService = new LiveService();
-
+const resultService = new ResultService();
 // pollId → sockets watching that poll's live results.
 // In-memory, so this assumes a single server instance.
 const rooms = new Map<string, Set<WebSocket>>();
@@ -28,7 +29,7 @@ const rooms = new Map<string, Set<WebSocket>>();
 // Sockets that answered the last heartbeat ping
 const aliveSockets = new WeakSet<WebSocket>();
 
-const joinRoom =(pollId: string, ws: WebSocket) => {
+const joinRoom = (pollId: string, ws: WebSocket) => {
   let room = rooms.get(pollId);
   if (!room) {
     room = new Set();
@@ -123,13 +124,27 @@ const attachLiveResults = (server: Server) => {
 
   wss.on(
     "connection",
-    (ws: WebSocket, _req: IncomingMessage, { pollId }: LiveConnectionContext) => {
+    (
+      ws: WebSocket,
+      _req: IncomingMessage,
+      { pollId }: LiveConnectionContext,
+    ) => {
       joinRoom(pollId, ws);
       aliveSockets.add(ws);
       ws.on("pong", () => aliveSockets.add(ws));
       // Unhandled socket errors would crash the process; close fires after error anyway
       ws.on("error", console.error);
       ws.on("close", () => leaveRoom(pollId, ws));
+
+      // Send current results straight away so a new viewer doesn't wait for the next vote.
+      // Socket may have closed while the query ran, so re-check before sending.
+      resultService
+        .getPollResults(pollId)
+        .then((data) => {
+          if (ws.readyState === WebSocket.OPEN)
+            ws.send(JSON.stringify({ type: "results", data }));
+        })
+        .catch((err) => console.error("initial results snapshot failed", err));
     },
   );
 
@@ -173,6 +188,13 @@ const attachLiveResults = (server: Server) => {
   );
 
   return wss;
+};
+
+export const pushResults = async (pollId: string) => {
+  const room = rooms.get(pollId);
+  if (!room) return;
+  const results = await resultService.getPollResults(pollId);
+  broadcastToPoll(pollId, { type: "results", data: results });
 };
 
 export default attachLiveResults;
