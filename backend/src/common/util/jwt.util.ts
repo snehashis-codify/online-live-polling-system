@@ -40,6 +40,14 @@ class JWTUtil {
     const decoded = jwt.verify(token, secret);
     return decoded;
   }
+  verifyRefreshToken(token: string) {
+    const secret = process.env.REFRESH_TOKEN_SECRET;
+    if (!secret) {
+      throw new Error("Missing REFRESH_TOKEN_SECRET");
+    }
+    const decoded = jwt.verify(token, secret);
+    return decoded;
+  }
 }
 
 export default JWTUtil;
