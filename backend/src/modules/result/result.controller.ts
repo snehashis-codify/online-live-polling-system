@@ -10,8 +10,8 @@ class ResultController {
   ) {
     try {
       const { pollId } = req.params;
-      const response = await resultService.getPollResults(pollId);
-      ApiResponse.ok(res, response, "Poll results fetched successfully");
+      const row = await resultService.getPollResults(pollId);
+       ApiResponse.ok(res, row, "Poll results fetched successfully");
     } catch (error) {
       next(error);
     }

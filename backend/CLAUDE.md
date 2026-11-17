@@ -42,6 +42,7 @@ ACCESS_TOKEN_SECRET=
 ACCESS_TOKEN_EXP=        # e.g. 15m
 REFRESH_TOKEN_SECRET=
 REFRESH_TOKEN_EXP=       # e.g. 7d
+FRONTEND_BASE_URL=       # e.g. http://localhost:3000 — CORS origin, WebSocket Origin check, and base for shared poll links (no trailing slash)
 ```
 
 Docker Compose reads `DB_USER`, `DB_PASS`, and `DB_NAME` to spin up the PostgreSQL container.

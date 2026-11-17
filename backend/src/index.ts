@@ -10,7 +10,12 @@ import cookieParser from "cookie-parser";
 function createApplication(): Express {
   const app = express();
   app.use(cookieParser());
-  app.use(cors({ credentials: true, origin: "http://localhost:3000" }));
+  app.use(
+    cors({
+      credentials: true,
+      origin: process.env.FRONTEND_BASE_URL ?? "http://localhost:3000",
+    }),
+  );
   app.use(express.json());
   //middlewares
 

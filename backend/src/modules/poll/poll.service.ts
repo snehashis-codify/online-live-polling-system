@@ -6,7 +6,7 @@ import {
   questionTable,
 } from "../../common/config/schema.js";
 
-import { eq } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import type {
   CreatePollInput,
   CreatePollOutput,
@@ -18,6 +18,15 @@ import ApiError from "../../common/util/api-error.util.js";
 import type { ActivatePollInput } from "./dto/activatePoll.dto.js";
 import type { PollRow } from "../../common/types/express.js";
 import type { GetPublicPollDetailOutput } from "./dto/getPublicPollDetail.dto.js";
+
+// Questions then options in creator-defined order; id breaks ties for rows
+// created before the position column existed (all default to 0)
+const displayOrder = [
+  asc(questionTable.position),
+  asc(questionTable.id),
+  asc(optionsTable.position),
+  asc(optionsTable.id),
+];
 
 class PollService {
   async create(
@@ -40,24 +49,31 @@ class PollService {
       const questionData = await tx
         .insert(questionTable)
         .values(
-          questions.map((q) => ({
+          questions.map((q, index) => ({
             questionTitle: q.questionTitle,
             questionType: q.questionType,
             pollId: pollData!.pollId,
+            position: index,
           })),
         )
-        .returning({ questionId: questionTable.id });
+        .returning({
+          questionId: questionTable.id,
+          position: questionTable.position,
+        });
 
       if (questionData.length !== questions.length) {
         tx.rollback();
       }
 
-      const insertedOptionsValues = questionData.flatMap((question, index) => {
-        const q = questions[index]!;
-        return q.options.map((option) => ({
+      // Match inserted rows back to the payload by position rather than by
+      // RETURNING order, which Postgres doesn't formally guarantee
+      const insertedOptionsValues = questionData.flatMap((question) => {
+        const q = questions[question.position]!;
+        return q.options.map((option, index) => ({
           questionId: question.questionId,
           optionTitle: option.title,
           optionValue: option.value,
+          position: index,
         }));
       });
 
@@ -99,7 +115,8 @@ class PollService {
       .from(pollTable)
       .where(eq(pollTable.id, pollId))
       .leftJoin(questionTable, eq(pollTable.id, questionTable.pollId))
-      .leftJoin(optionsTable, eq(questionTable.id, optionsTable.questionId));
+      .leftJoin(optionsTable, eq(questionTable.id, optionsTable.questionId))
+      .orderBy(...displayOrder);
     const filterDuplicatePoll = response
       .flatMap((row) => row.polls)
       .filter(
@@ -119,7 +136,7 @@ class PollService {
       status,
       expTime,
       responseMode,
-      sharedLink: `${process.env.FRONTEND_BASE_URL}/${linkToken}`,
+      sharedLink: `${process.env.FRONTEND_BASE_URL}/polls/${linkToken}`,
       isOpen: isPollOpen(expTime, status),
       questions: quesRes
         .filter((q) => q.pollId === id)
@@ -201,7 +218,8 @@ class PollService {
       .select()
       .from(questionTable)
       .where(eq(questionTable.pollId, pollId))
-      .leftJoin(optionsTable, eq(questionTable.id, optionsTable.questionId));
+      .leftJoin(optionsTable, eq(questionTable.id, optionsTable.questionId))
+      .orderBy(...displayOrder);
     const getUniqueOptionsList = response.flatMap((o) => o.options ?? []);
     if (!getUniqueOptionsList || getUniqueOptionsList.length <= 0) return;
     const getUniqueQuestionList = response

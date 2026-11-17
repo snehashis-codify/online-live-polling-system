@@ -1,4 +1,3 @@
-import { and, eq } from "drizzle-orm";
 import db from "../../common/config/db.js";
 import { answerTable, responseTable } from "../../common/config/schema.js";
 import type { AuthenticatedUser } from "../../common/types/express.js";
@@ -18,35 +17,13 @@ class ResponseService {
 
     try {
       return await db.transaction(async (tx) => {
-        let responseDetails: { responseId: string }[] | undefined;
-        const existingResponseDetails = userId
-          ? await tx
-              .select({ responseId: responseTable.id })
-              .from(responseTable)
-              .where(
-                and(
-                  eq(responseTable.pollId, pollId),
-                  eq(responseTable.respondentId, userId),
-                ),
-              )
-          : undefined;
-        const [existingResponse] = existingResponseDetails ?? [];
-        if (existingResponse) {
-          responseDetails = [existingResponse];
-          const responseId = existingResponse.responseId;
-          await tx
-            .update(responseTable)
-            .set({ updatedAt: new Date() })
-            .where(eq(responseTable.id, responseId));
-          await tx
-            .delete(answerTable)
-            .where(eq(answerTable.responseId, responseId));
-        } else {
-          responseDetails = await tx
-            .insert(responseTable)
-            .values({ pollId, respondentId: userId })
-            .returning({ responseId: responseTable.id });
-        }
+        // One response per authenticated user is final: reSubmissionGuard
+        // returns 409 up front, and the unique index (caught below) covers
+        // two submits racing past the guard
+        const responseDetails = await tx
+          .insert(responseTable)
+          .values({ pollId, respondentId: userId })
+          .returning({ responseId: responseTable.id });
 
         const insertedAnswerValues = questionAns.flatMap((val) => {
           if (!val.optionId || !responseDetails || !responseDetails[0]) {
