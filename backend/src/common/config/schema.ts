@@ -1,6 +1,7 @@
 import {
   boolean,
   index,
+  integer,
   pgEnum,
   pgTable,
   text,
@@ -60,6 +61,8 @@ const questionTable = pgTable(
       .references(() => pollTable.id, { onDelete: "cascade" })
       .notNull(),
     isMandatory: boolean("is_mandatory").default(false).notNull(),
+    // display order within the poll (0-based, from the create payload's array index)
+    position: integer("position").default(0).notNull(),
 
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").$onUpdate(() => new Date()),
@@ -76,6 +79,8 @@ const optionsTable = pgTable(
     questionId: uuid("question_id")
       .references(() => questionTable.id, { onDelete: "cascade" })
       .notNull(),
+    // display order within the question (0-based)
+    position: integer("position").default(0).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").$onUpdate(() => new Date()),
   },

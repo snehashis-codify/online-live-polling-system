@@ -43,6 +43,13 @@
       "when": 1783875263714,
       "tag": "0005_even_lockjaw",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1794920770660,
+      "tag": "0006_loud_groot",
+      "breakpoints": true
     }
   ]
 }

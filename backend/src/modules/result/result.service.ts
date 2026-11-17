@@ -26,9 +26,10 @@ class ResultService {
         .where(eq(questionTable.pollId, pollId))
         .groupBy(optionsTable.id, questionTable.id)
         .orderBy(
-          asc(questionTable.createdAt),
+          asc(questionTable.position),
           asc(questionTable.id),
-          asc(optionsTable.createdAt),
+          asc(optionsTable.position),
+          asc(optionsTable.id),
         ),
       // per-question distinct respondents (denominator for percentages)
       db
