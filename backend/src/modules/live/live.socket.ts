@@ -16,7 +16,9 @@ export interface LiveConnectionContext {
 
 const LIVE_PATH = "/results";
 const HEARTBEAT_INTERVAL_MS = 30_000;
-const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN ?? "http://localhost:3000";
+// Same origin CORS allows; must match the browser's Origin header exactly
+// (scheme + host + port, no trailing slash)
+const CLIENT_ORIGIN = process.env.FRONTEND_BASE_URL ?? "http://localhost:3000";
 // Custom close code (4000-4999 range is reserved for applications)
 export const POLL_CLOSED_CODE = 4000;
 

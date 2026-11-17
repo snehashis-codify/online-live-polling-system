@@ -136,7 +136,7 @@ class PollService {
       status,
       expTime,
       responseMode,
-      sharedLink: `${process.env.FRONTEND_BASE_URL}/${linkToken}`,
+      sharedLink: `${process.env.FRONTEND_BASE_URL}/polls/${linkToken}`,
       isOpen: isPollOpen(expTime, status),
       questions: quesRes
         .filter((q) => q.pollId === id)
